@@ -27,8 +27,17 @@ class ApiService {
   static Future<String>? _baseUrlResolver;
 
   // Income
-  static Future<List<Income>> getIncomes() async {
-    final response = await _get('/incomes');
+  static Future<List<Income>> getIncomes({
+    String? dateFrom,
+    String? dateTo,
+  }) async {
+    final response = await _get(
+      '/incomes',
+      queryParameters: {
+        if (dateFrom != null && dateFrom.isNotEmpty) 'date_from': dateFrom,
+        if (dateTo != null && dateTo.isNotEmpty) 'date_to': dateTo,
+      },
+    );
     if (response.statusCode == 200) {
       final List data = jsonDecode(response.body);
       return data.map((e) => Income.fromJson(e)).toList();
@@ -93,8 +102,19 @@ class ApiService {
   }
 
   // Expense
-  static Future<List<Expense>> getExpenses() async {
-    final response = await _get('/expenses');
+  static Future<List<Expense>> getExpenses({
+    int? recapId,
+    String? dateFrom,
+    String? dateTo,
+  }) async {
+    final response = await _get(
+      '/expenses',
+      queryParameters: {
+        if (recapId != null) 'recap_id': '$recapId',
+        if (dateFrom != null && dateFrom.isNotEmpty) 'date_from': dateFrom,
+        if (dateTo != null && dateTo.isNotEmpty) 'date_to': dateTo,
+      },
+    );
     if (response.statusCode == 200) {
       final List data = json.decode(response.body);
       return data.map((e) => Expense.fromJson(e)).toList();
@@ -107,15 +127,23 @@ class ApiService {
     required String name,
     required double amount,
     required String date,
+    int? recapId,
+    int? paymentMethodId,
+    String notes = '',
   }) async {
     final response = await _post(
       '/expenses',
       headers: _jsonHeaders,
       body: jsonEncode({
         'category_id': categoryId,
+        ...?recapId == null ? null : {'recap_id': recapId},
+        ...?paymentMethodId == null
+            ? null
+            : {'payment_method_id': paymentMethodId},
         'name': name,
         'amount': amount,
         'date': date,
+        if (notes.isNotEmpty) 'notes': notes,
       }),
     );
 
@@ -126,10 +154,30 @@ class ApiService {
     throw Exception('Gagal menambah expense');
   }
 
-  static Future<void> updateExpense(int id, String name, double amount) async {
+  static Future<void> updateExpense(
+    int id,
+    String name,
+    double amount, {
+    int? categoryId,
+    String? date,
+    int? recapId,
+    int? paymentMethodId,
+    String? notes,
+  }) async {
     final response = await _put(
       '/expenses/$id',
-      body: {'name': name, 'amount': amount.toString()},
+      headers: _jsonHeaders,
+      body: jsonEncode({
+        'name': name,
+        'amount': amount,
+        ...?categoryId == null ? null : {'category_id': categoryId},
+        ...?date == null ? null : {'date': date},
+        ...?recapId == null ? null : {'recap_id': recapId},
+        ...?paymentMethodId == null
+            ? null
+            : {'payment_method_id': paymentMethodId},
+        ...?notes == null ? null : {'notes': notes},
+      }),
     );
 
     if (response.statusCode != 200) {
@@ -264,6 +312,43 @@ class ApiService {
     throw Exception('Gagal memuat income entries');
   }
 
+  static Future<void> updateIncomeEntry({
+    required int recapId,
+    required int entryId,
+    required int incomeSourceId,
+    required double amount,
+    required String receivedDate,
+    required int paymentMethodId,
+    String notes = '',
+  }) async {
+    final response = await _put(
+      '/monthly-recaps/$recapId/income-entries/$entryId',
+      headers: _jsonHeaders,
+      body: jsonEncode({
+        'income_source_id': incomeSourceId,
+        'amount': amount,
+        'received_date': receivedDate,
+        'payment_method_id': paymentMethodId,
+        'notes': notes,
+      }),
+    );
+    if (response.statusCode != 200) {
+      throw Exception('Gagal mengubah income entry');
+    }
+  }
+
+  static Future<void> deleteIncomeEntry({
+    required int recapId,
+    required int entryId,
+  }) async {
+    final response = await _delete(
+      '/monthly-recaps/$recapId/income-entries/$entryId',
+    );
+    if (response.statusCode != 200) {
+      throw Exception('Gagal menghapus income entry');
+    }
+  }
+
   // Business income
   static Future<void> addBusinessIncome({
     required int recapId,
@@ -289,6 +374,45 @@ class ApiService {
 
     if (response.statusCode != 201 && response.statusCode != 200) {
       throw Exception('Gagal menambah business income');
+    }
+  }
+
+  static Future<void> updateBusinessIncome({
+    required int recapId,
+    required int entryId,
+    required int businessId,
+    required String description,
+    required double amount,
+    required String receivedDate,
+    required int paymentMethodId,
+    String notes = '',
+  }) async {
+    final response = await _put(
+      '/monthly-recaps/$recapId/business-incomes/$entryId',
+      headers: _jsonHeaders,
+      body: jsonEncode({
+        'business_id': businessId,
+        'description': description,
+        'amount': amount,
+        'received_date': receivedDate,
+        'payment_method_id': paymentMethodId,
+        'notes': notes,
+      }),
+    );
+    if (response.statusCode != 200) {
+      throw Exception('Gagal mengubah income bisnis');
+    }
+  }
+
+  static Future<void> deleteBusinessIncome({
+    required int recapId,
+    required int entryId,
+  }) async {
+    final response = await _delete(
+      '/monthly-recaps/$recapId/business-incomes/$entryId',
+    );
+    if (response.statusCode != 200) {
+      throw Exception('Gagal menghapus income bisnis');
     }
   }
 
@@ -490,6 +614,7 @@ class ApiService {
   }
 
   static Future<void> addDebt({
+    int? recapId,
     required int debtCategoryId,
     required String creditorName,
     required double totalAmount,
@@ -497,9 +622,42 @@ class ApiService {
     required int totalMonths,
     required String startDate,
     required String dueDate,
+    String notes = '',
   }) async {
     final response = await _post(
       '/debts',
+      headers: _jsonHeaders,
+      body: jsonEncode({
+        ...?recapId == null ? null : {'recap_id': recapId},
+        'debt_category_id': debtCategoryId,
+        'creditor_name': creditorName,
+        'total_amount': totalAmount,
+        'monthly_installment': monthlyInstallment,
+        'total_months': totalMonths,
+        'start_date': startDate,
+        'due_date': dueDate,
+        'notes': notes,
+      }),
+    );
+
+    if (response.statusCode != 201 && response.statusCode != 200) {
+      throw Exception('Gagal menambah hutang');
+    }
+  }
+
+  static Future<void> updateDebt({
+    required int id,
+    required int debtCategoryId,
+    required String creditorName,
+    required double totalAmount,
+    required double monthlyInstallment,
+    required int totalMonths,
+    required String startDate,
+    required String dueDate,
+    String notes = '',
+  }) async {
+    final response = await _put(
+      '/debts/$id',
       headers: _jsonHeaders,
       body: jsonEncode({
         'debt_category_id': debtCategoryId,
@@ -509,11 +667,18 @@ class ApiService {
         'total_months': totalMonths,
         'start_date': startDate,
         'due_date': dueDate,
+        'notes': notes,
       }),
     );
+    if (response.statusCode != 200) {
+      throw Exception('Gagal mengubah hutang');
+    }
+  }
 
-    if (response.statusCode != 201 && response.statusCode != 200) {
-      throw Exception('Gagal menambah hutang');
+  static Future<void> deleteDebt(int id) async {
+    final response = await _delete('/debts/$id');
+    if (response.statusCode != 200) {
+      throw Exception('Gagal menghapus hutang');
     }
   }
 
@@ -544,6 +709,43 @@ class ApiService {
     }
   }
 
+  static Future<void> updateDebtPayment({
+    required int recapId,
+    required int paymentId,
+    required double amountPaid,
+    required String paymentDate,
+    required int paymentMethodId,
+    String status = 'paid',
+    String notes = '',
+  }) async {
+    final response = await _put(
+      '/monthly-recaps/$recapId/debt-payments/$paymentId',
+      headers: _jsonHeaders,
+      body: jsonEncode({
+        'amount_paid': amountPaid,
+        'payment_date': paymentDate,
+        'payment_method_id': paymentMethodId,
+        'status': status,
+        'notes': notes,
+      }),
+    );
+    if (response.statusCode != 200) {
+      throw Exception('Gagal mengubah pembayaran hutang');
+    }
+  }
+
+  static Future<void> deleteDebtPayment({
+    required int recapId,
+    required int paymentId,
+  }) async {
+    final response = await _delete(
+      '/monthly-recaps/$recapId/debt-payments/$paymentId',
+    );
+    if (response.statusCode != 200) {
+      throw Exception('Gagal menghapus pembayaran hutang');
+    }
+  }
+
   // Budget allocation
   static Future<void> addBudgetAllocation({
     required int recapId,
@@ -566,6 +768,37 @@ class ApiService {
 
     if (response.statusCode != 201 && response.statusCode != 200) {
       throw Exception('Gagal menambah alokasi budget');
+    }
+  }
+
+  static Future<void> updateBudgetAllocation({
+    required int id,
+    required int budgetCategoryId,
+    required double plannedAmount,
+    required int paymentMethodId,
+    double? actualAmount,
+    String notes = '',
+  }) async {
+    final response = await _put(
+      '/budget-allocations/$id',
+      headers: _jsonHeaders,
+      body: jsonEncode({
+        'budget_category_id': budgetCategoryId,
+        'planned_amount': plannedAmount,
+        'payment_method_id': paymentMethodId,
+        ...?actualAmount == null ? null : {'actual_amount': actualAmount},
+        'notes': notes,
+      }),
+    );
+    if (response.statusCode != 200) {
+      throw Exception('Gagal mengubah alokasi budget');
+    }
+  }
+
+  static Future<void> deleteBudgetAllocation(int id) async {
+    final response = await _delete('/budget-allocations/$id');
+    if (response.statusCode != 200) {
+      throw Exception('Gagal menghapus alokasi budget');
     }
   }
 
@@ -596,6 +829,45 @@ class ApiService {
 
     if (response.statusCode != 201 && response.statusCode != 200) {
       throw Exception('Gagal menambah pengeluaran bisnis');
+    }
+  }
+
+  static Future<void> updateBusinessExpense({
+    required int businessId,
+    required int expenseId,
+    required int businessExpenseCategoryId,
+    required String description,
+    required double amount,
+    required String expenseDate,
+    required int paymentMethodId,
+    String notes = '',
+  }) async {
+    final response = await _put(
+      '/businesses/$businessId/expense/$expenseId',
+      headers: _jsonHeaders,
+      body: jsonEncode({
+        'business_expense_category_id': businessExpenseCategoryId,
+        'description': description,
+        'amount': amount,
+        'expense_date': expenseDate,
+        'payment_method_id': paymentMethodId,
+        'notes': notes,
+      }),
+    );
+    if (response.statusCode != 200) {
+      throw Exception('Gagal mengubah pengeluaran bisnis');
+    }
+  }
+
+  static Future<void> deleteBusinessExpense({
+    required int businessId,
+    required int expenseId,
+  }) async {
+    final response = await _delete(
+      '/businesses/$businessId/expense/$expenseId',
+    );
+    if (response.statusCode != 200) {
+      throw Exception('Gagal menghapus pengeluaran bisnis');
     }
   }
 
@@ -659,14 +931,12 @@ class ApiService {
             )
             .expand((business) {
               final categories =
-                  (business['expense_categories'] as List<dynamic>? ?? const []);
+                  (business['expense_categories'] as List<dynamic>? ??
+                  const []);
               return categories.map(
                 (category) => {
                   ...Map<String, dynamic>.from(category as Map),
-                  'business': {
-                    'id': business['id'],
-                    'name': business['name'],
-                  },
+                  'business': {'id': business['id'], 'name': business['name']},
                 },
               );
             })
@@ -747,7 +1017,13 @@ class ApiService {
             .get(_buildUri(baseUrl, '/payment-methods'))
             .timeout(_probeTimeout);
 
-        if (response.statusCode >= 200 && response.statusCode < 500) {
+        final contentType = response.headers['content-type'] ?? '';
+        final looksLikeJson =
+            contentType.contains('application/json') ||
+            response.body.trim().startsWith('[') ||
+            response.body.trim().startsWith('{');
+
+        if (response.statusCode == 200 && looksLikeJson) {
           return baseUrl;
         }
 
@@ -771,7 +1047,9 @@ class ApiService {
     Map<String, String>? queryParameters,
   }) {
     return Uri.parse('$baseUrl$path').replace(
-      queryParameters: queryParameters?.isEmpty ?? true ? null : queryParameters,
+      queryParameters: queryParameters?.isEmpty ?? true
+          ? null
+          : queryParameters,
     );
   }
 

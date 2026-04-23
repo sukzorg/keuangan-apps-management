@@ -9,9 +9,26 @@ use Illuminate\Validation\Rule;
 
 class IncomeController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        return response()->json(Income::with(['category', 'incomeSource'])->get());
+        $validated = $request->validate([
+            'date_from' => 'nullable|date',
+            'date_to' => 'nullable|date|after_or_equal:date_from',
+        ]);
+
+        $query = Income::with(['category', 'incomeSource'])
+            ->latest('date')
+            ->latest('id');
+
+        if (!empty($validated['date_from'])) {
+            $query->whereDate('date', '>=', $validated['date_from']);
+        }
+
+        if (!empty($validated['date_to'])) {
+            $query->whereDate('date', '<=', $validated['date_to']);
+        }
+
+        return response()->json($query->get());
     }
 
     public function store(Request $request)

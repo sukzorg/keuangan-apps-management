@@ -38,6 +38,8 @@ Route::get('/income-sources',           [MasterController::class, 'incomeSources
 Route::get('/businesses',                      [BusinessController::class, 'index']);
 Route::post('/businesses/{id}/income',         [BusinessController::class, 'addIncome']);
 Route::post('/businesses/{id}/expense',        [BusinessController::class, 'addExpense']);
+Route::put('/businesses/{id}/expense/{expenseId}', [BusinessController::class, 'updateExpense']);
+Route::delete('/businesses/{id}/expense/{expenseId}', [BusinessController::class, 'deleteExpense']);
 
 // ════════════════════════════════════════════════════════════════════
 // MONTHLY RECAP (inti aplikasi)
@@ -51,24 +53,32 @@ Route::get('/monthly-recaps/{id}/report',                   [MonthlyRecapControl
 // Income entries dalam satu rekap (gaji, investasi, dll)
 Route::post('/monthly-recaps/{id}/income-entries',          [MonthlyRecapController::class, 'addIncomeEntry']);
 Route::get('/monthly-recaps/{id}/income-entries',           [MonthlyRecapController::class, 'listIncomeEntries']);
+Route::put('/monthly-recaps/{id}/income-entries/{entryId}', [MonthlyRecapController::class, 'updateIncomeEntry']);
 Route::delete('/monthly-recaps/{id}/income-entries/{entryId}', [MonthlyRecapController::class, 'deleteIncomeEntry']);
 
 // Business income entries dalam satu rekap
 Route::post('/monthly-recaps/{id}/business-incomes',        [MonthlyRecapController::class, 'addBusinessIncome']);
 Route::get('/monthly-recaps/{id}/business-incomes',         [MonthlyRecapController::class, 'listBusinessIncomes']);
+Route::put('/monthly-recaps/{id}/business-incomes/{entryId}', [MonthlyRecapController::class, 'updateBusinessIncome']);
 Route::delete('/monthly-recaps/{id}/business-incomes/{entryId}', [MonthlyRecapController::class, 'deleteBusinessIncome']);
+Route::put('/monthly-recaps/{id}/debt-payments/{paymentId}', [MonthlyRecapController::class, 'updateDebtPayment']);
+Route::delete('/monthly-recaps/{id}/debt-payments/{paymentId}', [MonthlyRecapController::class, 'deleteDebtPayment']);
 
 // ════════════════════════════════════════════════════════════════════
 // HUTANG (DEBT)
 // ════════════════════════════════════════════════════════════════════
 Route::get('/debts',                [DebtController::class, 'index']);
 Route::post('/debts',               [DebtController::class, 'store']);
+Route::put('/debts/{id}',           [DebtController::class, 'update']);
+Route::delete('/debts/{id}',        [DebtController::class, 'destroy']);
 Route::post('/debts/{id}/pay',      [DebtController::class, 'pay']);
 
 // ════════════════════════════════════════════════════════════════════
 // BUDGET ALOKASI
 // ════════════════════════════════════════════════════════════════════
 Route::post('/budget-allocations',                          [BudgetController::class, 'store']);
+Route::put('/budget-allocations/{id}',                      [BudgetController::class, 'update']);
+Route::delete('/budget-allocations/{id}',                   [BudgetController::class, 'destroy']);
 Route::put('/budget-allocations/{id}/actual',               [BudgetController::class, 'updateActual']);
 
 // ════════════════════════════════════════════════════════════════════

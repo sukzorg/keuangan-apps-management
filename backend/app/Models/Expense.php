@@ -7,10 +7,28 @@ use App\Models\Category;
 
 class Expense extends Model
 {
-    protected $fillable = ['category_id', 'name', 'amount', 'date'];
+    protected $fillable = [
+        'recap_id',
+        'category_id',
+        'payment_method_id',
+        'name',
+        'amount',
+        'date',
+        'notes',
+    ];
+
+    public function recap()
+    {
+        return $this->belongsTo(MonthlyRecap::class, 'recap_id');
+    }
 
     public function category()
     {
         return $this->belongsTo(Category::class);
+    }
+
+    public function paymentMethod()
+    {
+        return $this->belongsTo(PaymentMethod::class, 'payment_method_id');
     }
 }

@@ -3,65 +3,69 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\MonthlyRecap;
-use App\Models\IncomeEntry;
-use App\Models\BusinessIncomeEntry;
-use App\Models\DebtPayment;
 use App\Models\BudgetAllocation;
 use App\Models\BusinessExpense;
+use App\Models\BusinessIncomeEntry;
+use App\Models\DebtItem;
+use App\Models\DebtPayment;
+use App\Models\Expense;
+use App\Models\IncomeEntry;
+use App\Models\MonthlyRecap;
+use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\Request;
 
 class MonthlyRecapController extends Controller
 {
-    // GET /monthly-recaps
     public function index()
     {
         $recaps = MonthlyRecap::orderBy('year', 'desc')
-                              ->orderBy('month', 'desc')
-                              ->get()
-                              ->map(function ($r) {
-                                  $r->load([
-                                      'incomeEntries',
-                                      'businessIncomeEntries',
-                                      'debtPayments',
-                                      'budgetAllocations',
-                                      'businessExpenses',
-                                  ]);
-                                  return array_merge($r->toArray(), [
-                                      'total_income'   => $r->total_income,
-                                      'total_expense'  => $r->total_expense,
-                                      'ending_balance' => $r->ending_balance,
-                                  ]);
-                              });
+            ->orderBy('month', 'desc')
+            ->get()
+            ->map(function ($recap) {
+                $recap->load([
+                    'expenses',
+                    'incomeEntries',
+                    'businessIncomeEntries',
+                    'debtPayments',
+                    'budgetAllocations',
+                    'businessExpenses',
+                ]);
+
+                return array_merge($recap->toArray(), [
+                    'total_income' => $recap->total_income,
+                    'total_expense' => $recap->total_expense,
+                    'ending_balance' => $recap->ending_balance,
+                ]);
+            });
 
         return response()->json($recaps);
     }
 
-    // POST /monthly-recaps
     public function store(Request $request)
     {
-        $request->validate([
-            'year'       => 'required|integer|min:2020|max:2099',
-            'month'      => 'required|integer|min:1|max:12',
+        $validated = $request->validate([
+            'year' => 'required|integer|min:2020|max:2099',
+            'month' => 'required|integer|min:1|max:12',
             'recap_date' => 'nullable|date',
-            'notes'      => 'nullable|string',
+            'notes' => 'nullable|string',
         ]);
 
         $recap = MonthlyRecap::create([
-            'year'       => $request->year,
-            'month'      => $request->month,
-            'status'     => 'draft',
-            'recap_date' => $request->recap_date,
-            'notes'      => $request->notes,
+            'year' => $validated['year'],
+            'month' => $validated['month'],
+            'status' => 'draft',
+            'recap_date' => $validated['recap_date'] ?? null,
+            'notes' => $validated['notes'] ?? null,
         ]);
 
         return response()->json($recap, 201);
     }
 
-    // GET /monthly-recaps/{id}
     public function show($id)
     {
         $recap = MonthlyRecap::with([
+            'expenses.category',
+            'expenses.paymentMethod',
             'incomeEntries.incomeSource',
             'incomeEntries.paymentMethod',
             'businessIncomeEntries.business',
@@ -80,14 +84,13 @@ class MonthlyRecapController extends Controller
         }
 
         return response()->json(array_merge($recap->toArray(), [
-            'total_income'   => $recap->total_income,
-            'total_expense'  => $recap->total_expense,
+            'total_income' => $recap->total_income,
+            'total_expense' => $recap->total_expense,
             'ending_balance' => $recap->ending_balance,
-            'summary'        => $this->buildSummary($recap),
+            'summary' => $this->buildSummary($recap),
         ]));
     }
 
-    // PUT /monthly-recaps/{id}/finalize
     public function finalize($id)
     {
         $recap = MonthlyRecap::find($id);
@@ -95,16 +98,19 @@ class MonthlyRecapController extends Controller
             return response()->json(['message' => 'Rekap tidak ditemukan'], 404);
         }
 
-        // BUGFIX: status harus 'finalized' bukan 'final'
-        $recap->update(['status' => 'finalized']);
-        return response()->json(['message' => 'Rekap berhasil difinalisasi', 'recap' => $recap]);
+        $recap->update(['status' => 'final']);
+
+        return response()->json([
+            'message' => 'Rekap berhasil difinalisasi',
+            'recap' => $recap,
+        ]);
     }
 
-    // GET /monthly-recaps/{id}/report
-    // ── Struktur DISESUAIKAN dengan Flutter RecapDetailPage ──────────
     public function report($id)
     {
         $recap = MonthlyRecap::with([
+            'expenses.category',
+            'expenses.paymentMethod',
             'incomeEntries.incomeSource',
             'incomeEntries.paymentMethod',
             'businessIncomeEntries.business',
@@ -122,130 +128,177 @@ class MonthlyRecapController extends Controller
             return response()->json(['message' => 'Rekap tidak ditemukan'], 404);
         }
 
-        // Ambil semua hutang aktif
-        $debts = \App\Models\DebtItem::where('status', 'active')->get();
+        $debts = DebtItem::with('debtCategory')
+            ->orderBy('status')
+            ->orderByDesc('id')
+            ->get();
 
-        // Format income_entries → Flutter baca 'income_source.name'
-        $incomeEntries = $recap->incomeEntries->map(fn($i) => [
-            'id'             => $i->id,
-            'amount'         => $i->amount,
-            'received_date'  => $i->received_date,
-            'notes'          => $i->notes,
-            'income_source'  => [
-                'id'   => $i->incomeSource->id,
-                'name' => $i->incomeSource->name,
+        $expenses = $recap->expenses->map(fn ($expense) => [
+            'id' => $expense->id,
+            'name' => $expense->name,
+            'amount' => $expense->amount,
+            'date' => $expense->date,
+            'notes' => $expense->notes,
+            'category' => $expense->category ? [
+                'id' => $expense->category->id,
+                'name' => $expense->category->name,
+            ] : null,
+            'payment_method' => $expense->paymentMethod ? [
+                'id' => $expense->paymentMethod->id,
+                'name' => $expense->paymentMethod->name,
+            ] : null,
+        ]);
+
+        $incomeEntries = $recap->incomeEntries->map(fn ($entry) => [
+            'id' => $entry->id,
+            'amount' => $entry->amount,
+            'received_date' => $entry->received_date,
+            'notes' => $entry->notes,
+            'income_source' => [
+                'id' => $entry->incomeSource->id,
+                'name' => $entry->incomeSource->name,
             ],
             'payment_method' => [
-                'id'   => $i->paymentMethod->id,
-                'name' => $i->paymentMethod->name,
+                'id' => $entry->paymentMethod->id,
+                'name' => $entry->paymentMethod->name,
             ],
         ]);
 
-        // Format business_incomes → Flutter baca 'business.name'
-        $businessIncomes = $recap->businessIncomeEntries->map(fn($b) => [
-            'id'             => $b->id,
-            'description'    => $b->description,
-            'amount'         => $b->amount,
-            'received_date'  => $b->received_date,
-            'notes'          => $b->notes,
-            'business'       => [
-                'id'   => $b->business->id,
-                'name' => $b->business->name,
+        $businessIncomes = $recap->businessIncomeEntries->map(fn ($entry) => [
+            'id' => $entry->id,
+            'description' => $entry->description,
+            'amount' => $entry->amount,
+            'received_date' => $entry->received_date,
+            'notes' => $entry->notes,
+            'business' => [
+                'id' => $entry->business->id,
+                'name' => $entry->business->name,
             ],
             'payment_method' => [
-                'id'   => $b->paymentMethod->id,
-                'name' => $b->paymentMethod->name,
+                'id' => $entry->paymentMethod->id,
+                'name' => $entry->paymentMethod->name,
             ],
         ]);
 
-        // Format budget_allocations → Flutter baca 'budget_category.name'
-        $budgetAllocations = $recap->budgetAllocations->map(fn($b) => [
-            'id'              => $b->id,
-            'planned_amount'  => $b->planned_amount,
-            'actual_amount'   => $b->actual_amount,
-            'notes'           => $b->notes,
+        $businessExpenses = $recap->businessExpenses->map(fn ($expense) => [
+            'id' => $expense->id,
+            'description' => $expense->description,
+            'amount' => $expense->amount,
+            'expense_date' => $expense->expense_date,
+            'notes' => $expense->notes,
+            'business' => [
+                'id' => $expense->business->id,
+                'name' => $expense->business->name,
+            ],
+            'expense_category' => [
+                'id' => $expense->expenseCategory->id,
+                'name' => $expense->expenseCategory->name,
+            ],
+            'payment_method' => [
+                'id' => $expense->paymentMethod->id,
+                'name' => $expense->paymentMethod->name,
+            ],
+        ]);
+
+        $budgetAllocations = $recap->budgetAllocations->map(fn ($allocation) => [
+            'id' => $allocation->id,
+            'planned_amount' => $allocation->planned_amount,
+            'actual_amount' => $allocation->actual_amount,
+            'notes' => $allocation->notes,
             'budget_category' => [
-                'id'       => $b->budgetCategory->id,
-                'name'     => $b->budgetCategory->name,
-                'priority' => $b->budgetCategory->priority,
+                'id' => $allocation->budgetCategory->id,
+                'name' => $allocation->budgetCategory->name,
+                'priority' => $allocation->budgetCategory->priority,
             ],
-            'payment_method'  => [
-                'id'   => $b->paymentMethod->id,
-                'name' => $b->paymentMethod->name,
+            'payment_method' => [
+                'id' => $allocation->paymentMethod->id,
+                'name' => $allocation->paymentMethod->name,
             ],
         ]);
 
-        // Format debts → Flutter tampilkan progress cicilan
-        $debtList = $debts->map(fn($d) => [
-            'id'                  => $d->id,
-            'creditor_name'       => $d->creditor_name,
-            'total_amount'        => $d->total_amount,
-            'monthly_installment' => $d->monthly_installment,
-            'total_months'        => $d->total_months,
-            'remaining_months'    => $d->remaining_months,
-            'status'              => $d->status,
+        $debtPayments = $recap->debtPayments->map(fn ($payment) => [
+            'id' => $payment->id,
+            'amount_paid' => $payment->amount_paid,
+            'payment_date' => $payment->payment_date,
+            'status' => $payment->status,
+            'notes' => $payment->notes,
+            'debt_item' => [
+                'id' => $payment->debtItem->id,
+                'creditor_name' => $payment->debtItem->creditor_name,
+                'monthly_installment' => $payment->debtItem->monthly_installment,
+                'debt_category' => $payment->debtItem->debtCategory ? [
+                    'id' => $payment->debtItem->debtCategory->id,
+                    'name' => $payment->debtItem->debtCategory->name,
+                ] : null,
+            ],
+            'payment_method' => [
+                'id' => $payment->paymentMethod->id,
+                'name' => $payment->paymentMethod->name,
+            ],
+        ]);
+
+        $debtList = $debts->map(fn ($debt) => [
+            'id' => $debt->id,
+            'creditor_name' => $debt->creditor_name,
+            'total_amount' => $debt->total_amount,
+            'monthly_installment' => $debt->monthly_installment,
+            'total_months' => $debt->total_months,
+            'remaining_months' => $debt->remaining_months,
+            'start_date' => $debt->start_date,
+            'due_date' => $debt->due_date,
+            'status' => $debt->status,
+            'notes' => $debt->notes,
+            'debt_category' => $debt->debtCategory ? [
+                'id' => $debt->debtCategory->id,
+                'name' => $debt->debtCategory->name,
+            ] : null,
         ]);
 
         return response()->json([
-            // Info rekap
-            'id'         => $recap->id,
-            'year'       => $recap->year,
-            'month'      => $recap->month,
-            'status'     => $recap->status,
-            'notes'      => $recap->notes,
+            'id' => $recap->id,
+            'year' => $recap->year,
+            'month' => $recap->month,
+            'status' => $recap->status,
+            'notes' => $recap->notes,
             'recap_date' => $recap->recap_date,
-
-            // Angka total — untuk Summary tab
-            'total_income'   => $recap->total_income,
-            'total_expense'  => $recap->total_expense,
-            'total_debt'     => $debts->sum('total_amount'),
-            'total_budget'   => $recap->budgetAllocations->sum('planned_amount'),
+            'total_income' => $recap->total_income,
+            'total_expense' => $recap->total_expense,
+            'total_debt' => $debts->where('status', 'active')->sum('total_amount'),
+            'total_budget' => $recap->budgetAllocations->sum('planned_amount'),
             'ending_balance' => $recap->ending_balance,
-
-            // Data list — untuk masing-masing tab di Flutter
-            'income_entries'     => $incomeEntries,
-            'business_incomes'   => $businessIncomes,
+            'expenses' => $expenses,
+            'income_entries' => $incomeEntries,
+            'business_incomes' => $businessIncomes,
+            'business_expenses' => $businessExpenses,
             'budget_allocations' => $budgetAllocations,
-            'debts'              => $debtList,
+            'debts' => $debtList,
+            'debt_payments' => $debtPayments,
         ]);
     }
 
-    // ─────────────────────────────────────────────────────────────────
-    // INCOME ENTRIES
-    // ─────────────────────────────────────────────────────────────────
-
     public function addIncomeEntry(Request $request, $id)
     {
-        $recap = MonthlyRecap::find($id);
-        if (!$recap) {
-            return response()->json(['message' => 'Rekap tidak ditemukan'], 404);
-        }
+        $recap = $this->findRecap($id);
+        $this->ensureRecapEditable($recap);
 
-        $request->validate([
-            'income_source_id'  => 'required|exists:income_sources,id',
-            'amount'            => 'required|numeric|min:0',
-            'received_date'     => 'required|date',
+        $validated = $request->validate([
+            'income_source_id' => 'required|exists:income_sources,id',
+            'amount' => 'required|numeric|min:0',
+            'received_date' => 'required|date',
             'payment_method_id' => 'required|exists:payment_methods,id',
-            'notes'             => 'nullable|string',
+            'notes' => 'nullable|string',
         ]);
 
-        $entry = IncomeEntry::create(array_merge(
-            $request->all(),
-            ['recap_id' => $id]
-        ));
+        $entry = IncomeEntry::create(array_merge($validated, [
+            'recap_id' => $id,
+        ]));
 
-        return response()->json(
-            $entry->load(['incomeSource', 'paymentMethod']),
-            201
-        );
+        return response()->json($entry->load(['incomeSource', 'paymentMethod']), 201);
     }
 
     public function listIncomeEntries($id)
     {
-        $recap = MonthlyRecap::find($id);
-        if (!$recap) {
-            return response()->json(['message' => 'Rekap tidak ditemukan'], 404);
-        }
+        $this->findRecap($id);
 
         $entries = IncomeEntry::with(['incomeSource', 'paymentMethod'])
             ->where('recap_id', $id)
@@ -253,58 +306,72 @@ class MonthlyRecapController extends Controller
 
         return response()->json([
             'entries' => $entries,
-            'total'   => $entries->sum('amount'),
+            'total' => $entries->sum('amount'),
         ]);
+    }
+
+    public function updateIncomeEntry(Request $request, $id, $entryId)
+    {
+        $recap = $this->findRecap($id);
+        $this->ensureRecapEditable($recap);
+
+        $entry = IncomeEntry::where('recap_id', $id)->find($entryId);
+        if (!$entry) {
+            return response()->json(['message' => 'Data tidak ditemukan'], 404);
+        }
+
+        $validated = $request->validate([
+            'income_source_id' => 'sometimes|exists:income_sources,id',
+            'amount' => 'sometimes|numeric|min:0',
+            'received_date' => 'sometimes|date',
+            'payment_method_id' => 'sometimes|exists:payment_methods,id',
+            'notes' => 'sometimes|nullable|string',
+        ]);
+
+        $entry->update($validated);
+
+        return response()->json($entry->load(['incomeSource', 'paymentMethod']));
     }
 
     public function deleteIncomeEntry($id, $entryId)
     {
-        $entry = IncomeEntry::where('recap_id', $id)->where('id', $entryId)->first();
+        $recap = $this->findRecap($id);
+        $this->ensureRecapEditable($recap);
+
+        $entry = IncomeEntry::where('recap_id', $id)->find($entryId);
         if (!$entry) {
             return response()->json(['message' => 'Data tidak ditemukan'], 404);
         }
 
         $entry->delete();
+
         return response()->json(['message' => 'Income entry berhasil dihapus']);
     }
 
-    // ─────────────────────────────────────────────────────────────────
-    // BUSINESS INCOME ENTRIES
-    // ─────────────────────────────────────────────────────────────────
-
     public function addBusinessIncome(Request $request, $id)
     {
-        $recap = MonthlyRecap::find($id);
-        if (!$recap) {
-            return response()->json(['message' => 'Rekap tidak ditemukan'], 404);
-        }
+        $recap = $this->findRecap($id);
+        $this->ensureRecapEditable($recap);
 
-        $request->validate([
-            'business_id'       => 'required|exists:business_profiles,id',
-            'description'       => 'required|string',
-            'amount'            => 'required|numeric|min:0',
-            'received_date'     => 'required|date',
+        $validated = $request->validate([
+            'business_id' => 'required|exists:business_profiles,id',
+            'description' => 'required|string',
+            'amount' => 'required|numeric|min:0',
+            'received_date' => 'required|date',
             'payment_method_id' => 'required|exists:payment_methods,id',
-            'notes'             => 'nullable|string',
+            'notes' => 'nullable|string',
         ]);
 
-        $entry = BusinessIncomeEntry::create(array_merge(
-            $request->all(),
-            ['recap_id' => $id]
-        ));
+        $entry = BusinessIncomeEntry::create(array_merge($validated, [
+            'recap_id' => $id,
+        ]));
 
-        return response()->json(
-            $entry->load(['business', 'paymentMethod']),
-            201
-        );
+        return response()->json($entry->load(['business', 'paymentMethod']), 201);
     }
 
     public function listBusinessIncomes($id)
     {
-        $recap = MonthlyRecap::find($id);
-        if (!$recap) {
-            return response()->json(['message' => 'Rekap tidak ditemukan'], 404);
-        }
+        $this->findRecap($id);
 
         $entries = BusinessIncomeEntry::with(['business', 'paymentMethod'])
             ->where('recap_id', $id)
@@ -312,34 +379,128 @@ class MonthlyRecapController extends Controller
 
         return response()->json([
             'entries' => $entries,
-            'total'   => $entries->sum('amount'),
+            'total' => $entries->sum('amount'),
         ]);
+    }
+
+    public function updateBusinessIncome(Request $request, $id, $entryId)
+    {
+        $recap = $this->findRecap($id);
+        $this->ensureRecapEditable($recap);
+
+        $entry = BusinessIncomeEntry::where('recap_id', $id)->find($entryId);
+        if (!$entry) {
+            return response()->json(['message' => 'Data tidak ditemukan'], 404);
+        }
+
+        $validated = $request->validate([
+            'business_id' => 'sometimes|exists:business_profiles,id',
+            'description' => 'sometimes|string',
+            'amount' => 'sometimes|numeric|min:0',
+            'received_date' => 'sometimes|date',
+            'payment_method_id' => 'sometimes|exists:payment_methods,id',
+            'notes' => 'sometimes|nullable|string',
+        ]);
+
+        $entry->update($validated);
+
+        return response()->json($entry->load(['business', 'paymentMethod']));
     }
 
     public function deleteBusinessIncome($id, $entryId)
     {
-        $entry = BusinessIncomeEntry::where('recap_id', $id)->where('id', $entryId)->first();
+        $recap = $this->findRecap($id);
+        $this->ensureRecapEditable($recap);
+
+        $entry = BusinessIncomeEntry::where('recap_id', $id)->find($entryId);
         if (!$entry) {
             return response()->json(['message' => 'Data tidak ditemukan'], 404);
         }
 
         $entry->delete();
+
         return response()->json(['message' => 'Business income entry berhasil dihapus']);
     }
 
-    // ─────────────────────────────────────────────────────────────────
-    // PRIVATE HELPER
-    // ─────────────────────────────────────────────────────────────────
+    public function updateDebtPayment(Request $request, $id, $paymentId)
+    {
+        $recap = $this->findRecap($id);
+        $this->ensureRecapEditable($recap);
+
+        $payment = DebtPayment::with('debtItem')
+            ->where('recap_id', $id)
+            ->find($paymentId);
+
+        if (!$payment) {
+            return response()->json(['message' => 'Pembayaran hutang tidak ditemukan'], 404);
+        }
+
+        $validated = $request->validate([
+            'amount_paid' => 'sometimes|numeric|min:0',
+            'payment_date' => 'sometimes|date',
+            'payment_method_id' => 'sometimes|exists:payment_methods,id',
+            'status' => 'sometimes|in:paid,partial,skipped',
+            'notes' => 'sometimes|nullable|string',
+        ]);
+
+        $payment->update($validated);
+        $payment->debtItem->recalculateProgress();
+
+        return response()->json($payment->load(['debtItem.debtCategory', 'paymentMethod']));
+    }
+
+    public function deleteDebtPayment($id, $paymentId)
+    {
+        $recap = $this->findRecap($id);
+        $this->ensureRecapEditable($recap);
+
+        $payment = DebtPayment::with('debtItem')
+            ->where('recap_id', $id)
+            ->find($paymentId);
+
+        if (!$payment) {
+            return response()->json(['message' => 'Pembayaran hutang tidak ditemukan'], 404);
+        }
+
+        $debtItem = $payment->debtItem;
+        $payment->delete();
+        $debtItem->recalculateProgress();
+
+        return response()->json(['message' => 'Pembayaran hutang berhasil dihapus']);
+    }
+
+    private function findRecap(int $id): MonthlyRecap
+    {
+        $recap = MonthlyRecap::find($id);
+
+        if (!$recap) {
+            throw new HttpResponseException(response()->json([
+                'message' => 'Rekap tidak ditemukan',
+            ], 404));
+        }
+
+        return $recap;
+    }
+
+    private function ensureRecapEditable(MonthlyRecap $recap): void
+    {
+        if (in_array($recap->status, ['final', 'finalized'], true)) {
+            throw new HttpResponseException(response()->json([
+                'message' => 'Rekap yang sudah difinalisasi tidak dapat diubah.',
+            ], 422));
+        }
+    }
 
     private function buildSummary(MonthlyRecap $recap): array
     {
         return [
             'income_by_source' => $recap->incomeEntries
-                ->groupBy(fn($i) => $i->incomeSource->name ?? 'Unknown')
+                ->groupBy(fn ($item) => $item->incomeSource->name ?? 'Unknown')
                 ->map->sum('amount'),
-            'expense_by_type'  => [
-                'debt'     => $recap->debtPayments->sum('amount_paid'),
-                'budget'   => $recap->budgetAllocations->sum('actual_amount'),
+            'expense_by_type' => [
+                'expense' => $recap->expenses->sum('amount'),
+                'debt' => $recap->debtPayments->sum('amount_paid'),
+                'budget' => $recap->budgetAllocations->sum('actual_amount'),
                 'business' => $recap->businessExpenses->sum('amount'),
             ],
         ];
