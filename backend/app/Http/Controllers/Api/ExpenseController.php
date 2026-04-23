@@ -24,6 +24,8 @@ class ExpenseController extends Controller
 
         if (!empty($validated['recap_id'])) {
             $query->where('recap_id', (int) $validated['recap_id']);
+        } else {
+            $query->whereNull('recap_id');
         }
 
         if (!empty($validated['date_from'])) {

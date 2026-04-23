@@ -42,6 +42,43 @@ class TransactionListFilterTest extends TestCase
             ->assertJsonPath('0.name', 'Isi BBM Baru');
     }
 
+    public function test_expense_index_hides_legacy_recap_expenses_from_daily_list(): void
+    {
+        $category = Category::create([
+            'name' => 'Belanja',
+            'type' => 'expense',
+            'is_active' => true,
+        ]);
+
+        Expense::create([
+            'category_id' => $category->id,
+            'name' => 'Belanja Harian',
+            'amount' => 50000,
+            'date' => '2026-04-21',
+        ]);
+
+        $recapId = \App\Models\MonthlyRecap::create([
+            'year' => 2026,
+            'month' => 4,
+            'status' => 'draft',
+        ])->id;
+
+        Expense::create([
+            'recap_id' => $recapId,
+            'category_id' => $category->id,
+            'name' => 'Legacy Recap Expense',
+            'amount' => 125000,
+            'date' => '2026-04-21',
+        ]);
+
+        $response = $this->getJson('/api/expenses');
+
+        $response
+            ->assertOk()
+            ->assertJsonCount(1)
+            ->assertJsonPath('0.name', 'Belanja Harian');
+    }
+
     public function test_income_index_can_filter_by_date_range(): void
     {
         Income::create([

@@ -35,8 +35,20 @@ class _RecapReportPageState extends State<RecapReportPage> {
 
     final incomeEntries = (report['income_entries'] as List?) ?? [];
     final businessIncomes = (report['business_incomes'] as List?) ?? [];
+    final expenses = (report['expenses'] as List?) ?? [];
+    final businessExpenses = (report['business_expenses'] as List?) ?? [];
     final budgets = (report['budget_allocations'] as List?) ?? [];
     final debts = (report['debts'] as List?) ?? [];
+    final totalExpenseDetail = expenses.fold<double>(
+          0,
+          (sum, item) =>
+              sum + (double.tryParse(item['amount'].toString()) ?? 0),
+        ) +
+        businessExpenses.fold<double>(
+          0,
+          (sum, item) =>
+              sum + (double.tryParse(item['amount'].toString()) ?? 0),
+        );
 
     final totalIncome = double.tryParse(report['total_income'].toString()) ?? 0;
     final totalExpense =
@@ -190,6 +202,76 @@ class _RecapReportPageState extends State<RecapReportPage> {
             pw.SizedBox(height: 16),
           ],
 
+          if (expenses.isNotEmpty || businessExpenses.isNotEmpty) ...[
+            _pdfSectionHeader('PENGELUARAN', PdfColors.red800),
+            pw.SizedBox(height: 8),
+
+            if (expenses.isNotEmpty) ...[
+              pw.Text(
+                'Pengeluaran Bulanan',
+                style: pw.TextStyle(
+                  fontSize: 11,
+                  fontWeight: pw.FontWeight.bold,
+                ),
+              ),
+              pw.SizedBox(height: 4),
+              _pdfTable(
+                headers: ['Kategori', 'Nama', 'Tanggal', 'Bayar', 'Jumlah', 'Catatan'],
+                rows: expenses
+                    .map<List<String>>(
+                      (e) => [
+                        e['category']?['name']?.toString() ?? '-',
+                        e['name']?.toString() ?? '-',
+                        e['date']?.toString() ?? '-',
+                        e['payment_method']?['name']?.toString() ?? '-',
+                        AppTheme.formatRupiahFull(e['amount']),
+                        e['notes']?.toString().trim().isNotEmpty == true
+                            ? e['notes'].toString()
+                            : '-',
+                      ],
+                    )
+                    .toList(),
+              ),
+              pw.SizedBox(height: 8),
+            ],
+
+            if (businessExpenses.isNotEmpty) ...[
+              pw.Text(
+                'Pengeluaran Bisnis',
+                style: pw.TextStyle(
+                  fontSize: 11,
+                  fontWeight: pw.FontWeight.bold,
+                ),
+              ),
+              pw.SizedBox(height: 4),
+              _pdfTable(
+                headers: ['Bisnis', 'Kategori', 'Deskripsi', 'Tanggal', 'Jumlah', 'Catatan'],
+                rows: businessExpenses
+                    .map<List<String>>(
+                      (e) => [
+                        e['business']?['name']?.toString() ?? '-',
+                        e['expense_category']?['name']?.toString() ?? '-',
+                        e['description']?.toString() ?? '-',
+                        e['expense_date']?.toString() ?? '-',
+                        AppTheme.formatRupiahFull(e['amount']),
+                        e['notes']?.toString().trim().isNotEmpty == true
+                            ? e['notes'].toString()
+                            : '-',
+                      ],
+                    )
+                    .toList(),
+              ),
+              pw.SizedBox(height: 8),
+            ],
+
+            _pdfTotalRow(
+              'Total Pengeluaran Operasional',
+              AppTheme.formatRupiahFull(totalExpenseDetail),
+              PdfColors.red800,
+            ),
+            pw.SizedBox(height: 16),
+          ],
+
           // ── HUTANG ────────────────────────────────────────────
           if (debts.isNotEmpty) ...[
             _pdfSectionHeader('HUTANG AKTIF', PdfColors.orange800),
@@ -221,7 +303,7 @@ class _RecapReportPageState extends State<RecapReportPage> {
             _pdfSectionHeader('ALOKASI BUDGET', PdfColors.purple800),
             pw.SizedBox(height: 8),
             _pdfTable(
-              headers: ['Kategori', 'Budget', 'Realisasi', 'Selisih'],
+              headers: ['Kategori', 'Budget', 'Realisasi', 'Selisih', 'Catatan'],
               rows: budgets.map<List<String>>((b) {
                 final planned =
                     double.tryParse(b['planned_amount'].toString()) ?? 0;
@@ -233,6 +315,9 @@ class _RecapReportPageState extends State<RecapReportPage> {
                   AppTheme.formatRupiahFull(planned),
                   AppTheme.formatRupiahFull(actual),
                   AppTheme.formatRupiahFull(diff),
+                  b['notes']?.toString().trim().isNotEmpty == true
+                      ? b['notes'].toString()
+                      : '-',
                 ];
               }).toList(),
             ),
@@ -443,8 +528,20 @@ class _RecapReportPageState extends State<RecapReportPage> {
           final report = snapshot.data!;
           final incomeEntries = (report['income_entries'] as List?) ?? [];
           final businessIncomes = (report['business_incomes'] as List?) ?? [];
+          final expenses = (report['expenses'] as List?) ?? [];
+          final businessExpenses = (report['business_expenses'] as List?) ?? [];
           final budgets = (report['budget_allocations'] as List?) ?? [];
           final debts = (report['debts'] as List?) ?? [];
+          final expenseDetailTotal = expenses.fold<double>(
+                0,
+                (sum, item) =>
+                    sum + (double.tryParse(item['amount'].toString()) ?? 0),
+              ) +
+              businessExpenses.fold<double>(
+                0,
+                (sum, item) =>
+                    sum + (double.tryParse(item['amount'].toString()) ?? 0),
+              );
 
           return SingleChildScrollView(
             padding: const EdgeInsets.all(16),
@@ -491,6 +588,49 @@ class _RecapReportPageState extends State<RecapReportPage> {
                     "Total Pemasukan",
                     report['total_income'],
                     AppTheme.income,
+                  ),
+                  const SizedBox(height: 20),
+                ],
+                if (expenses.isNotEmpty || businessExpenses.isNotEmpty) ...[
+                  _sectionHeader(
+                    "Pengeluaran",
+                    AppTheme.expense,
+                    Icons.arrow_upward,
+                  ),
+                  const SizedBox(height: 10),
+                  if (expenses.isNotEmpty) ...[
+                    _subHeader("Pengeluaran Bulanan"),
+                    ...expenses.map(
+                      (e) => _transactionTile(
+                        title: e['name']?.toString() ?? '-',
+                        subtitle:
+                            '${e['category']?['name']?.toString() ?? '-'} • ${e['date']?.toString() ?? '-'} • ${e['payment_method']?['name']?.toString() ?? '-'}',
+                        amount: e['amount'],
+                        color: AppTheme.expense,
+                        icon: Icons.receipt_long,
+                        note: e['notes']?.toString(),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+                  if (businessExpenses.isNotEmpty) ...[
+                    _subHeader("Pengeluaran Bisnis"),
+                    ...businessExpenses.map(
+                      (e) => _transactionTile(
+                        title: e['description']?.toString() ?? '-',
+                        subtitle:
+                            '${e['business']?['name']?.toString() ?? '-'} • ${e['expense_category']?['name']?.toString() ?? '-'} • ${e['expense_date']?.toString() ?? '-'}',
+                        amount: e['amount'],
+                        color: Colors.deepOrange,
+                        icon: Icons.business_center,
+                        note: e['notes']?.toString(),
+                      ),
+                    ),
+                  ],
+                  _totalRow(
+                    "Total Pengeluaran Operasional",
+                    expenseDetailTotal,
+                    AppTheme.expense,
                   ),
                   const SizedBox(height: 20),
                 ],
@@ -698,6 +838,7 @@ class _RecapReportPageState extends State<RecapReportPage> {
     required dynamic amount,
     required Color color,
     required IconData icon,
+    String? note,
   }) {
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
@@ -728,6 +869,17 @@ class _RecapReportPageState extends State<RecapReportPage> {
                 ),
                 if (subtitle.isNotEmpty)
                   Text(subtitle, style: AppTheme.caption),
+                if (note?.trim().isNotEmpty == true)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Text(
+                      note!.trim(),
+                      style: AppTheme.caption.copyWith(
+                        color: Colors.grey.shade700,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  ),
               ],
             ),
           ),
@@ -802,6 +954,7 @@ class _RecapReportPageState extends State<RecapReportPage> {
     final actual =
         double.tryParse(budget['actual_amount']?.toString() ?? '0') ?? 0;
     final diff = planned - actual;
+    final notes = budget['notes']?.toString() ?? '';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
@@ -811,36 +964,57 @@ class _RecapReportPageState extends State<RecapReportPage> {
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: AppTheme.divider),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.pie_chart, color: AppTheme.budget, size: 18),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              budget['budget_category']?['name']?.toString() ?? '-',
-              style: AppTheme.body.copyWith(fontWeight: FontWeight.w600),
-            ),
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
+          Row(
             children: [
-              Text(
-                AppTheme.formatRupiah(planned),
-                style: AppTheme.amount.copyWith(
-                  color: AppTheme.budget,
-                  fontSize: 13,
+              const Icon(Icons.pie_chart, color: AppTheme.budget, size: 18),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  budget['budget_category']?['name']?.toString() ?? '-',
+                  style: AppTheme.body.copyWith(fontWeight: FontWeight.w600),
                 ),
               ),
-              Text(
-                diff >= 0
-                    ? "Sisa ${AppTheme.formatRupiah(diff)}"
-                    : "Lebih ${AppTheme.formatRupiah(diff.abs())}",
-                style: AppTheme.caption.copyWith(
-                  color: diff >= 0 ? Colors.green : Colors.red,
-                ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    AppTheme.formatRupiah(planned),
+                    style: AppTheme.amount.copyWith(
+                      color: AppTheme.budget,
+                      fontSize: 13,
+                    ),
+                  ),
+                  Text(
+                    diff >= 0
+                        ? "Sisa ${AppTheme.formatRupiah(diff)}"
+                        : "Lebih ${AppTheme.formatRupiah(diff.abs())}",
+                    style: AppTheme.caption.copyWith(
+                      color: diff >= 0 ? Colors.green : Colors.red,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
+          const SizedBox(height: 8),
+          Text(
+            'Realisasi: ${AppTheme.formatRupiah(actual)}',
+            style: AppTheme.caption.copyWith(color: Colors.grey.shade700),
+          ),
+          if (notes.trim().isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                'Catatan: $notes',
+                style: AppTheme.caption.copyWith(
+                  color: Colors.grey.shade700,
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+            ),
         ],
       ),
     );

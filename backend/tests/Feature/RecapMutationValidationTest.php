@@ -5,9 +5,9 @@ namespace Tests\Feature;
 use App\Models\Category;
 use App\Models\DebtCategory;
 use App\Models\DebtItem;
-use App\Models\Expense;
 use App\Models\MonthlyRecap;
 use App\Models\PaymentMethod;
+use App\Models\RecapExpense;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -35,8 +35,7 @@ class RecapMutationValidationTest extends TestCase
             'is_active' => true,
         ]);
 
-        $response = $this->postJson('/api/expenses', [
-            'recap_id' => $recap->id,
+        $response = $this->postJson("/api/monthly-recaps/{$recap->id}/expenses", [
             'category_id' => $category->id,
             'payment_method_id' => $paymentMethod->id,
             'name' => 'Belanja Mingguan',
@@ -52,7 +51,7 @@ class RecapMutationValidationTest extends TestCase
                 'Rekap yang sudah difinalisasi tidak dapat diubah.'
             );
 
-        $this->assertDatabaseCount('expenses', 0);
+        $this->assertDatabaseCount('recap_expenses', 0);
     }
 
     public function test_updating_debt_payment_recalculates_remaining_months(): void
@@ -138,7 +137,7 @@ class RecapMutationValidationTest extends TestCase
             'is_active' => true,
         ]);
 
-        Expense::create([
+        RecapExpense::create([
             'recap_id' => $recap->id,
             'category_id' => $category->id,
             'payment_method_id' => $paymentMethod->id,

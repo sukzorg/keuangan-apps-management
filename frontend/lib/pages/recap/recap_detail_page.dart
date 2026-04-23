@@ -745,18 +745,18 @@ class _RecapDetailPageState extends State<RecapDetailPage>
         }
 
         if (isEdit) {
-          await ApiService.updateExpense(
-            existing['id'] as int,
-            nameController.text.trim(),
-            amount!,
+          await ApiService.updateRecapExpense(
+            recapId: widget.recapId,
+            expenseId: existing['id'] as int,
+            name: nameController.text.trim(),
+            amount: amount!,
             categoryId: selectedCategoryId,
             date: dateController.text,
-            recapId: widget.recapId,
             paymentMethodId: selectedMethodId,
             notes: notesController.text,
           );
         } else {
-          await ApiService.addExpense(
+          await ApiService.addRecapExpense(
             recapId: widget.recapId,
             categoryId: selectedCategoryId!,
             name: nameController.text.trim(),
@@ -1301,7 +1301,10 @@ class _RecapDetailPageState extends State<RecapDetailPage>
       case 'expense':
         await _executeDelete(
           'pengeluaran bulanan',
-          () => ApiService.deleteExpense(item['id'] as int),
+          () => ApiService.deleteRecapExpense(
+            recapId: widget.recapId,
+            expenseId: item['id'] as int,
+          ),
         );
         break;
       case 'business_expense':
@@ -1644,7 +1647,10 @@ class _RecapDetailPageState extends State<RecapDetailPage>
                     ? null
                     : () => _executeDelete(
                           'pengeluaran bulanan',
-                          () => ApiService.deleteExpense(expense['id'] as int),
+                          () => ApiService.deleteRecapExpense(
+                            recapId: widget.recapId,
+                            expenseId: expense['id'] as int,
+                          ),
                         ),
               ),
             ),

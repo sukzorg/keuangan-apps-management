@@ -49,6 +49,10 @@ Route::post('/monthly-recaps',                              [MonthlyRecapControl
 Route::get('/monthly-recaps/{id}',                          [MonthlyRecapController::class, 'show']);
 Route::put('/monthly-recaps/{id}/finalize',                 [MonthlyRecapController::class, 'finalize']);
 Route::get('/monthly-recaps/{id}/report',                   [MonthlyRecapController::class, 'report']);
+Route::post('/monthly-recaps/{id}/expenses',                [MonthlyRecapController::class, 'addExpense']);
+Route::get('/monthly-recaps/{id}/expenses',                 [MonthlyRecapController::class, 'listExpenses']);
+Route::put('/monthly-recaps/{id}/expenses/{expenseId}',     [MonthlyRecapController::class, 'updateExpense']);
+Route::delete('/monthly-recaps/{id}/expenses/{expenseId}',  [MonthlyRecapController::class, 'deleteExpense']);
 
 // Income entries dalam satu rekap (gaji, investasi, dll)
 Route::post('/monthly-recaps/{id}/income-entries',          [MonthlyRecapController::class, 'addIncomeEntry']);

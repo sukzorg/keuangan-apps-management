@@ -5,7 +5,7 @@ use Illuminate\Database\Eloquent\Model;
 class MonthlyRecap extends Model {
     protected $fillable = ['year', 'month', 'status', 'recap_date', 'notes'];
 
-    public function expenses()             { return $this->hasMany(Expense::class, 'recap_id'); }
+    public function expenses()             { return $this->hasMany(RecapExpense::class, 'recap_id'); }
     public function incomeEntries()        { return $this->hasMany(IncomeEntry::class, 'recap_id'); }
     public function businessIncomeEntries(){ return $this->hasMany(BusinessIncomeEntry::class, 'recap_id'); }
     public function debtPayments()         { return $this->hasMany(DebtPayment::class, 'recap_id'); }

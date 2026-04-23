@@ -8,11 +8,12 @@ use App\Models\BusinessExpense;
 use App\Models\BusinessIncomeEntry;
 use App\Models\DebtItem;
 use App\Models\DebtPayment;
-use App\Models\Expense;
 use App\Models\IncomeEntry;
 use App\Models\MonthlyRecap;
+use App\Models\RecapExpense;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class MonthlyRecapController extends Controller
 {
@@ -274,6 +275,92 @@ class MonthlyRecapController extends Controller
             'debts' => $debtList,
             'debt_payments' => $debtPayments,
         ]);
+    }
+
+    public function addExpense(Request $request, $id)
+    {
+        $recap = $this->findRecap($id);
+        $this->ensureRecapEditable($recap);
+
+        $validated = $request->validate([
+            'category_id' => [
+                'required',
+                Rule::exists('categories', 'id')->where(
+                    fn ($query) => $query->where('type', 'expense')
+                ),
+            ],
+            'name' => 'required|string|max:255',
+            'amount' => 'required|numeric|min:0',
+            'date' => 'required|date',
+            'payment_method_id' => 'required|exists:payment_methods,id',
+            'notes' => 'nullable|string',
+        ]);
+
+        $expense = RecapExpense::create(array_merge($validated, [
+            'recap_id' => $recap->id,
+        ]));
+
+        return response()->json($expense->load(['category', 'paymentMethod']), 201);
+    }
+
+    public function listExpenses($id)
+    {
+        $this->findRecap($id);
+
+        $expenses = RecapExpense::with(['category', 'paymentMethod'])
+            ->where('recap_id', $id)
+            ->latest('date')
+            ->latest('id')
+            ->get();
+
+        return response()->json([
+            'expenses' => $expenses,
+            'total' => $expenses->sum('amount'),
+        ]);
+    }
+
+    public function updateExpense(Request $request, $id, $expenseId)
+    {
+        $recap = $this->findRecap($id);
+        $this->ensureRecapEditable($recap);
+
+        $expense = RecapExpense::where('recap_id', $id)->find($expenseId);
+        if (!$expense) {
+            return response()->json(['message' => 'Pengeluaran tidak ditemukan'], 404);
+        }
+
+        $validated = $request->validate([
+            'category_id' => [
+                'sometimes',
+                Rule::exists('categories', 'id')->where(
+                    fn ($query) => $query->where('type', 'expense')
+                ),
+            ],
+            'name' => 'sometimes|string|max:255',
+            'amount' => 'sometimes|numeric|min:0',
+            'date' => 'sometimes|date',
+            'payment_method_id' => 'sometimes|exists:payment_methods,id',
+            'notes' => 'sometimes|nullable|string',
+        ]);
+
+        $expense->update($validated);
+
+        return response()->json($expense->load(['category', 'paymentMethod']));
+    }
+
+    public function deleteExpense($id, $expenseId)
+    {
+        $recap = $this->findRecap($id);
+        $this->ensureRecapEditable($recap);
+
+        $expense = RecapExpense::where('recap_id', $id)->find($expenseId);
+        if (!$expense) {
+            return response()->json(['message' => 'Pengeluaran tidak ditemukan'], 404);
+        }
+
+        $expense->delete();
+
+        return response()->json(['message' => 'Pengeluaran berhasil dihapus']);
     }
 
     public function addIncomeEntry(Request $request, $id)

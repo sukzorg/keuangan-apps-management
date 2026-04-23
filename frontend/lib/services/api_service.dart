@@ -267,6 +267,73 @@ class ApiService {
     throw Exception('Gagal memuat laporan');
   }
 
+  static Future<void> addRecapExpense({
+    required int recapId,
+    required int categoryId,
+    required String name,
+    required double amount,
+    required String date,
+    required int paymentMethodId,
+    String notes = '',
+  }) async {
+    final response = await _post(
+      '/monthly-recaps/$recapId/expenses',
+      headers: _jsonHeaders,
+      body: jsonEncode({
+        'category_id': categoryId,
+        'name': name,
+        'amount': amount,
+        'date': date,
+        'payment_method_id': paymentMethodId,
+        if (notes.isNotEmpty) 'notes': notes,
+      }),
+    );
+
+    if (response.statusCode != 200 && response.statusCode != 201) {
+      throw Exception('Gagal menambah pengeluaran rekap');
+    }
+  }
+
+  static Future<void> updateRecapExpense({
+    required int recapId,
+    required int expenseId,
+    required String name,
+    required double amount,
+    int? categoryId,
+    String? date,
+    int? paymentMethodId,
+    String? notes,
+  }) async {
+    final response = await _put(
+      '/monthly-recaps/$recapId/expenses/$expenseId',
+      headers: _jsonHeaders,
+      body: jsonEncode({
+        'name': name,
+        'amount': amount,
+        ...?categoryId == null ? null : {'category_id': categoryId},
+        ...?date == null ? null : {'date': date},
+        ...?paymentMethodId == null
+            ? null
+            : {'payment_method_id': paymentMethodId},
+        ...?notes == null ? null : {'notes': notes},
+      }),
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception('Gagal mengubah pengeluaran rekap');
+    }
+  }
+
+  static Future<void> deleteRecapExpense({
+    required int recapId,
+    required int expenseId,
+  }) async {
+    final response = await _delete('/monthly-recaps/$recapId/expenses/$expenseId');
+    if (response.statusCode != 200) {
+      throw Exception('Gagal menghapus pengeluaran rekap');
+    }
+  }
+
   static Future<void> finalizeRecap(int id) async {
     final response = await _put(
       '/monthly-recaps/$id/finalize',

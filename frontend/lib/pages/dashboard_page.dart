@@ -15,6 +15,11 @@ class _DashboardPageState extends State<DashboardPage> {
   late Future<Map<String, dynamic>> _dashboard;
   late Future<List<Expense>> _expenses;
 
+  static const String _appName = 'Keuangan App Mobile';
+  static const String _copyright =
+      '© 2026 Sukzorg. All rights reserved.';
+  static const String _developedBy = 'Developed by Sukzorg';
+
   final List<Color> _pieColors = [
     Colors.blue,
     Colors.red,
@@ -52,6 +57,21 @@ class _DashboardPageState extends State<DashboardPage> {
     return "Rp ${num.toStringAsFixed(0)}";
   }
 
+  void _showAboutApp() {
+    showAboutDialog(
+      context: context,
+      applicationName: _appName,
+      applicationVersion: 'Version 1.0.0',
+      applicationLegalese: '$_copyright\n$_developedBy',
+      children: [
+        const SizedBox(height: 8),
+        const Text(
+          'Aplikasi pencatatan keuangan untuk pemasukan, pengeluaran, rekap bulanan, dan master data bisnis.',
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -59,6 +79,13 @@ class _DashboardPageState extends State<DashboardPage> {
         title: const Text("Dashboard"),
         backgroundColor: Colors.blue,
         foregroundColor: Colors.white,
+        actions: [
+          IconButton(
+            tooltip: 'Tentang aplikasi',
+            onPressed: _showAboutApp,
+            icon: const Icon(Icons.info_outline),
+          ),
+        ],
       ),
 
       body: FutureBuilder<Map<String, dynamic>>(
@@ -307,6 +334,30 @@ class _DashboardPageState extends State<DashboardPage> {
                         ),
                       );
                     },
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Center(
+                  child: Column(
+                    children: [
+                      Text(
+                        _developedBy,
+                        style: const TextStyle(
+                          color: Colors.grey,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        _copyright,
+                        style: const TextStyle(
+                          color: Colors.grey,
+                          fontSize: 11,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
                   ),
                 ),
               ],

@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
-import 'pages/main.navigations.dart';
+
+import 'pages/auth_gate_page.dart';
 import 'theme/app_theme.dart';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
   runApp(const MyApp());
 }
 
@@ -12,10 +14,10 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Keuangan App',
+      title: 'Keuangan App Mobile',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.theme,
-      home: const MainNavigation(),
+      home: const AuthGatePage(),
     );
   }
 }
